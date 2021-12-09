@@ -2,8 +2,8 @@ import React, { VoidFunctionComponent } from 'react';
 import { useHistory } from 'react-router-dom';
 import { useAuth, useBasename, useConfig } from '@rhoas/app-services-ui-shared';
 import { AppServicesLoading, Metrics, MetricsProps, MetricsI18n } from '@rhoas/app-services-ui-components';
-import { fetchKafkaInstanceMetrics, fetchTopicsMetrics } from './metricsApi';
 import { I18nextProvider, useTranslation } from 'react-i18next';
+import { fetchKafkaInstanceMetrics, fetchKafkaTopisFromAdmin, fetchMetricsKpi, fetchTopicMetrics } from './api';
 
 type ConnectedMetricsProps = {
   kafkaId: string;
@@ -36,11 +36,32 @@ export const ConnectedMetrics: VoidFunctionComponent<ConnectedMetricsProps> = ({
       accessToken: auth?.kas.getToken(),
     });
 
-  const getTopicMetrics: MetricsProps['getTopicsMetrics'] = (props) =>
-    fetchTopicsMetrics({
-      ...props,
-      kafkaAdminAccessToken: auth?.kafka.getToken(),
-      kafkaAdminServerUrl: kafkaAdminUrl,
+  const getTopicMetrics: MetricsProps['getTopicsMetrics'] = async (props) => {
+    const [kafkaTopics, metrics] = await Promise.all([
+      fetchKafkaTopisFromAdmin({
+        accessToken: auth?.kafka.getToken(),
+        basePath: kafkaAdminUrl,
+      }),
+      fetchTopicMetrics({
+        ...props,
+        kafkaId,
+        basePath: config.kas.apiBasePath,
+        accessToken: auth?.kas.getToken(),
+      }),
+    ]);
+    const { metricsTopics, bytesIncoming, bytesOutgoing, bytesPerPartition, incomingMessageRate } = metrics;
+    return {
+      kafkaTopics,
+      metricsTopics,
+      bytesIncoming,
+      bytesOutgoing,
+      bytesPerPartition,
+      incomingMessageRate,
+    };
+  };
+
+  const getMetricsKpi: MetricsProps['getMetricsKpi'] = () =>
+    fetchMetricsKpi({
       kafkaId,
       basePath: config.kas.apiBasePath,
       accessToken: auth?.kas.getToken(),
@@ -52,7 +73,7 @@ export const ConnectedMetrics: VoidFunctionComponent<ConnectedMetricsProps> = ({
         onCreateTopic={onCreateTopic}
         getTopicsMetrics={getTopicMetrics}
         getKafkaInstanceMetrics={getKafkaInstanceMetrics}
-        getMetricsKpi={() => Promise.reject({})}
+        getMetricsKpi={getMetricsKpi}
       />
     </I18nextProvider>
   );
